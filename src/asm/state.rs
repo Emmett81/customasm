@@ -1335,24 +1335,20 @@ impl State
 
 		let mut size_guess = 0;
 
-		// Parse the tokens twice, once to find the labels
-		// and then to assemble the output
-		for found_labels in 0..2 {
+		// Parse the tokens twice, once to find the labels and guess
+		// size of result, then to assemble the output
+		for iterations in 0..2 {
 
 			// Clone the context in order to advance the logical address
 			// between instructions.
 			let mut inner_ctx = ctx.clone();
 
-			let mut line = 0;
-
 			let mut parser = syntax::Parser::new(Some(info.report.clone()), info.tokens);
 
 			//println!("asm block `{}`", fileserver.get_excerpt(&parser.get_full_span()));
-			
+
 			while !parser.is_over()
 			{
-				line += 1;
-
 				// Substitute `{x}` occurrences with tokens from the argument
 				let mut subs_parser = parser.slice_until_linebreak_over_nested_braces();
 				let subparser_span = subs_parser.get_full_span();
@@ -1401,12 +1397,14 @@ impl State
 				if subparser.next_is(0, syntax::TokenKind::Identifier) && subparser.next_is(1, syntax::TokenKind::Colon)
 				{
 					let label_tk = subparser.expect(syntax::TokenKind::Identifier)?;
+					
 					let label_name = label_tk.excerpt.as_ref().unwrap();
-					//println!("Label: {} / {} / {}", line, found_labels, label_name);
+
 					info.args.set_local(
 						label_name,
 						expr::Value::make_integer(
-							self.get_addr(info.report.clone(), &inner_ctx, &subparser_span)?));					
+							self.get_addr(info.report.clone(), &inner_ctx, &subparser_span)?));			
+
 					subparser.expect(syntax::TokenKind::Colon)?;
 				}
 				else 
@@ -1418,9 +1416,7 @@ impl State
 						fileserver,
 						info.report.clone())?;					
 
-					dbg!(matches.size_guess);
-
-					if found_labels == 0
+					if iterations == 0
 					{			
 						let value = self.resolve_rule_invocation(
 							info.report.clone(),
@@ -1431,17 +1427,12 @@ impl State
 
 						if value.get_bigint().is_some() && value.get_bigint().unwrap().size.is_some() {
 							let size = value.get_bigint().unwrap().size.unwrap();
-							//println!("Size guess: {} / {} / {}", line, found_labels, size);
-							if size_guess == 0
-							{
-								size_guess = size;
-							}
+							size_guess += size;
 							inner_ctx.bit_offset += size;
-						}
-						
+						} 				
 					}
 
-					if found_labels == 1
+					if iterations == 1
 					{			
 						let value = self.resolve_rule_invocation(
 							info.report.clone(),
@@ -1482,23 +1473,6 @@ impl State
 			
 						if size > 0
 						{
-
-							//println!("Size: {} / {} / {} / {}", line, found_labels, size, size_guess);
-							if size_guess == 0
-							{
-								size_guess = size;
-							}
-
-							if size != size_guess
-							{
-
-								info.report.error_span(
-									"Size did not converge.",
-									&subparser_span);
-			
-								return Err(());
-							}
-
 							if result.size.unwrap() == 0
 							{
 								result = bigint;
@@ -1514,14 +1488,22 @@ impl State
 							inner_ctx.bit_offset += size;
 						}
 					}
-
-
-					//println!("  value = {:?}", value);
 				}
 				parser.expect_linebreak()?;
 			}
 		}
+
+		//println!("  result size guess = {:?}", size_guess);
 		//println!("  result size = {:?}", result.size);
+
+		if size_guess != result.size.unwrap()
+		{
+			info.report.error_span(
+				"Size of instruction did not converge after iterations",
+				&syntax::Parser::new(Some(info.report.clone()), info.tokens).get_full_span());
+				return Err(());
+		}
+
 		Ok(expr::Value::make_integer(result))
 	}
 }
