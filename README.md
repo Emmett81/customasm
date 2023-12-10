@@ -1,3 +1,11 @@
+# WARNING
+
+This is an old unmaintained fork of [customasm](https://github.com/hlorenzi/customasm).
+It is the result of me needing a very specific asm{} behauviour for the one-instruction-cpu I was designing at the time.
+
+It is here AT IS for MY OWN personal use. 
+Feel free to also USE IT AT YOUR OWN RISK.
+
 # customasm
 This is an assembler that takes custom, user-defined instruction sets
 and uses them to assemble source files.  
